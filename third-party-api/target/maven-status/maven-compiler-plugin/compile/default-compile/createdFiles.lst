@@ -1,0 +1,13 @@
+third\party\api\controller\APIServiceController.class
+third\party\api\service\FooService.class
+third\party\api\converter\ModelToEntityConverterImpl.class
+third\party\api\repository\FinancialMessageRepository.class
+third\party\api\APIServiceRunner.class
+third\party\api\controller\CustomerController.class
+third\party\api\service\BarService.class
+third\party\api\service\CheckCustomerRegistrationService.class
+third\party\api\entity\FinancialMessage.class
+third\party\api\service\APIServiceImpl.class
+third\party\api\service\spi\APIService.class
+third\party\api\model\CustomerResponse.class
+third\party\api\model\IncomingFinancialMessage.class
