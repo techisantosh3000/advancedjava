@@ -1,5 +1,7 @@
 package com.analysis.json.parsing.model;
 
+import com.google.gson.annotations.JsonAdapter;
+
 import java.util.List;
 
 public class UserDetail {

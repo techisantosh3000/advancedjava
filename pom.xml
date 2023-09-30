@@ -25,5 +25,6 @@
     <module>temporal</module>
       <module>mapstruct</module>
       <module>benchmarking</module>
+      <module>kafkaconsumer</module>
   </modules>
 </project>

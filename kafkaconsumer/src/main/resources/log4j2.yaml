@@ -1,0 +1,41 @@
+Configuration:
+  status: error
+  appenders:
+    ConsoleAppender:
+      name: ConsoleAppender
+      target: SYSTEM_OUT
+      PatternLayout:
+        Pattern: "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"
+
+    KafkaAppender:
+      name: KafkaAppender
+      ignoreExceptions: false
+      topic: kafka-logs-topic
+      layout:
+        PatternLayout:
+          Pattern: "%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"
+      KafkaProducer:
+        bootstrap.servers: localhost:9092
+        key.serializer: org.apache.kafka.common.serialization.StringSerializer
+        value.serializer: org.apache.kafka.common.serialization.StringSerializer
+      KafkaManager:
+        name: KafkaManager
+        kafkaLoggerConfig:
+          additivity: false
+          level: ERROR
+          name: KafkaLoggerConfig
+          loggerName: org.apache.kafka.clients.consumer.ConsumerConfig
+          appenderRef:
+            ref: KafkaAppender
+
+  loggers:
+    root:
+      level: INFO
+      AppenderRef:
+        ref: ConsoleAppender
+
+    logger:
+      - name: org.apache.kafka.clients.consumer
+        level: ERROR
+        AppenderRef:
+          ref: KafkaAppender
