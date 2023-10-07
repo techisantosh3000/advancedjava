@@ -12,8 +12,10 @@
       <directory url="file://$PROJECT_DIR$/mapstruct/src/main/resources/archetype-resources" includeSubdirectories="true" />
       <directory url="file://$PROJECT_DIR$/benchmarking/src/main/resources/archetype-resources" includeSubdirectories="true" />
       <directory url="file://$PROJECT_DIR$/kafkaconsumer/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/rest-endpoint-v1/src/main/resources/archetype-resources" includeSubdirectories="true" />
     </excludeFromCompile>
     <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
       <profile name="Maven default annotation processors profile" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
@@ -22,6 +24,7 @@
         <module name="java8" />
         <module name="third-party-api" />
         <module name="mapstruct" />
+        <module name="rest-endpoint-v1" />
         <module name="kafkaconsumer" />
         <module name="event-driven-service" />
         <module name="jobrunnner" />
@@ -39,6 +42,7 @@
       <module name="jobrunnner" options="-parameters" />
       <module name="kafkaconsumer" options="-parameters" />
       <module name="mapstruct" options="-parameters" />
+      <module name="rest-endpoint-v1" options="-parameters" />
       <module name="temporal" options="-parameters" />
       <module name="third-party-api" options="-parameters" />
     </option>

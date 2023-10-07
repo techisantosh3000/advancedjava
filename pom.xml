@@ -26,5 +26,6 @@
       <module>mapstruct</module>
       <module>benchmarking</module>
       <module>kafkaconsumer</module>
+      <module>rest-endpoint-v1</module>
   </modules>
 </project>
