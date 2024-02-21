@@ -3,13 +3,13 @@ package com.analysis.json.parsing.main;
 import com.analysis.json.parsing.model.*;
 import com.google.gson.Gson;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.*;
 
 public class ApplicationJsonParserRunner {
     public static void main(String[] args) {
         //manipulateSampleResponse();
-        userjsonParser();
+        //userjsonParser();
+        analysisEmptyList();
     }
 
     public static void manipulateSampleResponse(){
@@ -36,5 +36,17 @@ public class ApplicationJsonParserRunner {
         user1.setUserAddress(new Address(1000,"1000"));
         Gson gson1 = new Gson();
         System.out.println(""+gson1.toJson(user1));
+    }
+
+    static void analysisEmptyList(){
+        List<User> userList = Collections.emptyList();//Arrays.asList(new User(1000L), new User(2000L));//
+
+        Optional<User> user = userList != null ? userList.stream().findFirst() : Optional.empty();
+
+        if(!user.isPresent()){
+            System.out.println("+++++++++++done+++++++++++");
+        }else{
+            System.out.println("----------Not-------------");
+        }
     }
 }
