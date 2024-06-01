@@ -3,6 +3,7 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/benchmarking/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/event-driven-service/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/java-ds-v1/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java11/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java11/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/java8/src/main/java" charset="UTF-8" />
@@ -11,6 +12,8 @@
     <file url="file://$PROJECT_DIR$/kafkaconsumer/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/mapstruct/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/rest-endpoint-v1/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/security-analysis-v1/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/spring-all-modules-v1/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/temporal/src/main/java" charset="UTF-8" />

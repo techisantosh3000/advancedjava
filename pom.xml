@@ -27,5 +27,8 @@
       <module>benchmarking</module>
       <module>kafkaconsumer</module>
       <module>rest-endpoint-v1</module>
+      <module>security-analysis-v1</module>
+      <module>spring-all-modules-v1</module>
+      <module>java-ds-v1</module>
   </modules>
 </project>
