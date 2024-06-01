@@ -53,7 +53,7 @@ public class AnalysisClient {
     // Here
     // Focused
     //
-    public APIResponse doSomethingMore() {
+    public APIResponse doSomethingMore(final String state) {
         String resourceUrl
                 = "http://localhost:9001/v1/data";
 
@@ -64,8 +64,9 @@ public class AnalysisClient {
         Map<String,List<Error>> errorList = null;
         APIResponse apiResponse = new APIResponse();
 
+        // change here for success and error.
         HttpEntity<String> request =
-                new HttpEntity<String>(new String("success"));
+                new HttpEntity<String>(new String(state));
 
         ResponseEntity<?> productCreateResponse = null;
 

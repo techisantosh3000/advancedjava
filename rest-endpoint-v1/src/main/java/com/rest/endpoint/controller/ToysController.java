@@ -1,6 +1,5 @@
 package com.rest.endpoint.controller;
 
-import com.rest.endpoint.dto.APIResponse;
 import com.rest.endpoint.model.Error;
 import com.rest.endpoint.model.Toy;
 import org.springframework.http.HttpStatus;

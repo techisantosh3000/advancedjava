@@ -1,19 +1,12 @@
 package com.rest.endpoint.controller;
 
-import com.rest.endpoint.model.Error;
 import com.rest.endpoint.model.Toy;
 import com.rest.endpoint.service.AnalysisClient;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
-import javax.swing.text.html.parser.Entity;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,14 +24,26 @@ public class AnalysisController {
     }
 
     @GetMapping("/getMyToy")
-    public ResponseEntity<?> getMyToy(){
-        System.out.println("client response "+client.doSomethingMore());
-        Optional<Toy> findMyToy = client.doSomethingMore().getToys().stream().findFirst();
+    public ResponseEntity<?> getMyToy(@RequestParam String state){
+        System.out.println("client response "+client.doSomethingMore(state));
+        Optional<Toy> findMyToy = client.doSomethingMore(state).getToys().stream().findFirst();
         if(findMyToy.isPresent()) {
             return new ResponseEntity<>(findMyToy.get(), HttpStatus.OK);
         }
 
-        return new ResponseEntity<>(client.doSomethingMore().getErrors(), HttpStatus.BAD_REQUEST);
+        return new ResponseEntity<>(client.doSomethingMore(state).getErrors(), HttpStatus.BAD_REQUEST);
+
+    }
+
+    @GetMapping("/toys")
+    public ResponseEntity<?> getToys(@RequestParam String state){
+        System.out.println("client response "+client.doSomethingMore(state));
+        List<Toy> findMyToys = client.doSomethingMore(state).getToys();
+        if(!findMyToys.isEmpty()) {
+            return new ResponseEntity<>(findMyToys, HttpStatus.OK);
+        }
+
+        return new ResponseEntity<>(client.doSomethingMore(state).getErrors(), HttpStatus.BAD_REQUEST);
 
     }
 
