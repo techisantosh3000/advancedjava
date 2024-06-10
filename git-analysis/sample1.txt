@@ -1,0 +1,2 @@
+This is a new sample1.
+It has different data.
