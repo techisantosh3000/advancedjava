@@ -80,5 +80,13 @@ public class RunnerApplication {
         return Math.pow(a, n);
     }
 
+    public static boolean ifNumberIsPowerOf3(int num) {
+        return false;
+    }
+
+    public static void sorting(){
+
+    }
+
 
 }
