@@ -30,5 +30,6 @@
         <module>security-analysis-v1</module>
         <module>spring-all-modules-v1</module>
         <module>java-ds-v1</module>
+        <module>designpatterns</module>
     </modules>
 </project>

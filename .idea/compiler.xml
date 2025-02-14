@@ -24,6 +24,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="benchmarking" />
+        <module name="designpatterns" />
         <module name="kafkaconsumer" />
         <module name="event-driven-service" />
         <module name="jobrunnner" />
@@ -42,6 +43,7 @@
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="benchmarking" options="-parameters" />
+      <module name="designpatterns" options="-parameters" />
       <module name="event-driven-service" options="-parameters" />
       <module name="java-ds-v1" options="-parameters" />
       <module name="java11" options="-parameters" />
