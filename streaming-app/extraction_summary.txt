@@ -1,0 +1,59 @@
+
+================================================================================
+JAVA CODE EXTRACTION SUMMARY
+================================================================================
+Generated on: 2025-08-24 19:07:37
+Working Directory: C:\Users\sansunda2\advancedjava\streaming-app
+Output File: all_java_code.txt
+
+📊 EXTRACTION STATISTICS
+------------------------------------------------------------
+Total Files Processed: 8
+Total Lines of Code: 297
+Total Size: 14.3 KB
+
+📁 DIRECTORY BREAKDOWN
+------------------------------------------------------------
+src/main/java: 8 files
+
+Main Source Files: 8
+Test Files: 0
+
+🏷️  FILE TYPE BREAKDOWN  
+------------------------------------------------------------
+Consumer: 1 files
+Model: 3 files
+Service: 1 files
+Stream Processor: 2 files
+Test: 1 files
+
+📦 PACKAGES FOUND (6)
+------------------------------------------------------------
+- com.example
+- com.example.consumer
+- com.example.controller
+- com.example.model
+- com.example.service
+- com.example.streams
+
+🏗️  CLASSES/INTERFACES FOUND (8)
+------------------------------------------------------------
+- KafkaProducerService
+- KafkaStreamsApplication
+- KafkaTestController
+- TraditionalKafkaConsumer
+- UserActivityProcessor
+- UserActivitySummary
+- UserEvent
+- UserProfile
+
+📂 FILES PROCESSED
+------------------------------------------------------------
+✅ com/example/KafkaStreamsApplication.java
+✅ com/example/consumer/TraditionalKafkaConsumer.java
+✅ com/example/controller/KafkaTestController.java
+✅ com/example/model/UserActivitySummary.java
+✅ com/example/model/UserEvent.java
+✅ com/example/model/UserProfile.java
+✅ com/example/service/KafkaProducerService.java
+✅ com/example/streams/UserActivityProcessor.java

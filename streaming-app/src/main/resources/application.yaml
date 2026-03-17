@@ -1,0 +1,19 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      group-id: user-events-group
+      properties:
+        spring.json.trusted.packages: "com.example.model"
+    streams:
+      application-id: user-activity-processor
+      bootstrap-servers: localhost:9092
+      default-key-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      default-value-serde: org.springframework.kafka.support.serializer.JsonSerde
+      properties:
+        spring.json.trusted.packages: "com.example.model"

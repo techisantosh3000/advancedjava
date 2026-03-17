@@ -1,0 +1,640 @@
+package com.lbg.corebanking.streaming.accbalance.consumer;
+
+import com.google.protobuf.Timestamp;
+import com.lbg.banking.accountbalance.*;
+import com.lbg.corebanking.streaming.accbalance.model.AccountKTable;
+import com.lbg.corebanking.streaming.accbalance.model.Balance;
+import com.lbg.corebanking.streaming.accbalance.model.BalanceEvent;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Comprehensive test data utility class for PBL (Product Code 9002) unit testing
+ * Provides methods to create various test scenarios for Private Banking Loan account balance events
+ */
+public class PBLTestData {
+
+    // PBL Test Constants
+    public static final String PBL_ACCOUNT_ID = "PBL123456789";
+    public static final String PBL_SORT_CODE = "654321";
+    public static final String PBL_ACCOUNT_NUMBER = "87654321";
+    public static final String PBL_PRODUCT_CODE = "9002";
+    public static final String PBL_EVENT_KEY = PBL_ACCOUNT_ID + "_" + UUID.randomUUID();
+    public static final String PBL_POSTING_BATCH_ID = "pbl-batch-" + UUID.randomUUID();
+
+    // Regular Account Constants (for comparison)
+    public static final String REGULAR_ACCOUNT_ID = "REG123456789";
+    public static final String REGULAR_SORT_CODE = "123456";
+    public static final String REGULAR_ACCOUNT_NUMBER = "12345678";
+    public static final String REGULAR_PRODUCT_CODE = "9001";
+
+    // Event Subjects
+    public static final String PBL_ACCOUNT_BALANCE_EVENT_SUBJECT = "Private Banking Loan Account Balance Event";
+    public static final String ACCOUNT_BALANCE_EVENT_SUBJECT = "Personal Savings Account Balance Event";
+
+    // Common timestamps
+    public static final String DEFAULT_TIMESTAMP = "2024-11-26T10:30:45.123456Z";
+    public static final String DEFAULT_VALUE_TIME = "2024-11-26T10:30:45.123456Z";
+
+    // Balance addresses used in filtering
+    public static final String[] VALID_BALANCE_ADDRESSES = {
+        "DEFAULT", "ACCRUED_INCOMING", "DEBIT_INT_ACCRUED", "ARREAR_BALANCE", "ARREAR_INT_BALANCE"
+    };
+
+    public static final String[] INVALID_BALANCE_ADDRESSES = {
+        "INVALID_ADDRESS", "ACCRUED_OUTGOING", "PENDING_BALANCE", "UNAUTHORIZED", "TEST_ADDRESS"
+    };
+
+    // Phase values
+    public static final String COMMITTED_PHASE = "POSTING_PHASE_COMMITTED";
+    public static final String PENDING_PHASE = "POSTING_PHASE_PENDING";
+    public static final String CANCELLED_PHASE = "POSTING_PHASE_CANCELLED";
+
+    /**
+     * Creates a valid PBL balance event with single balance
+     */
+    public static BalanceEvent validPBLBalanceEvent() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        event.setBalances(List.of(createPBLBalance("DEFAULT", "5000.00")));
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+        event.setSortCode(PBL_SORT_CODE);
+        event.setAccountNumber(PBL_ACCOUNT_NUMBER);
+        return event;
+    }
+
+    /**
+     * Creates a PBL balance event with multiple balance types
+     */
+    public static BalanceEvent validPBLBalanceEventWithMultipleBalances() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        
+        List<Balance> balances = new ArrayList<>();
+        balances.add(createPBLBalance("DEFAULT", "10000.00"));
+        balances.add(createPBLBalance("ACCRUED_INCOMING", "250.75"));
+        balances.add(createPBLBalance("ARREAR_BALANCE", "500.00"));
+        // This should be filtered out due to invalid phase
+        balances.add(createPBLBalance("DEFAULT", "100.00", PENDING_PHASE));
+        // This should be filtered out due to invalid address
+        balances.add(createPBLBalance("INVALID_ADDRESS", "200.00", COMMITTED_PHASE));
+        
+        event.setBalances(balances);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+        event.setSortCode(PBL_SORT_CODE);
+        event.setAccountNumber(PBL_ACCOUNT_NUMBER);
+        return event;
+    }
+
+    /**
+     * Creates an invalid PBL balance event (wrong phase and address)
+     */
+    public static BalanceEvent invalidPBLBalanceEvent() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        
+        List<Balance> balances = new ArrayList<>();
+        balances.add(createPBLBalance("INVALID_ADDRESS", "1000.00", PENDING_PHASE));
+        balances.add(createPBLBalance("ANOTHER_INVALID", "500.00", CANCELLED_PHASE));
+        balances.add(createPBLBalance("DEFAULT", "300.00", PENDING_PHASE)); // Valid address but invalid phase
+        
+        event.setBalances(balances);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+        return event;
+    }
+
+    /**
+     * Creates a regular account balance event (for comparison tests)
+     */
+    public static BalanceEvent validRegularBalanceEvent() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(REGULAR_ACCOUNT_ID);
+        event.setPostingInstructionBatchId("reg-batch-" + UUID.randomUUID());
+        event.setBalances(List.of(createRegularBalance("DEFAULT", "2000.00")));
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(REGULAR_PRODUCT_CODE);
+        event.setSortCode(REGULAR_SORT_CODE);
+        event.setAccountNumber(REGULAR_ACCOUNT_NUMBER);
+        return event;
+    }
+
+    /**
+     * Creates a PBL balance with default committed phase
+     */
+    public static Balance createPBLBalance(String accountAddress, String amount) {
+        return createPBLBalance(accountAddress, amount, COMMITTED_PHASE);
+    }
+
+    /**
+     * Creates a PBL balance with specified phase
+     */
+    public static Balance createPBLBalance(String accountAddress, String amount, String phase) {
+        Balance balance = new Balance();
+        balance.setId("pbl_balance_" + UUID.randomUUID());
+        balance.setAccountId(PBL_ACCOUNT_ID);
+        balance.setAccountAddress(accountAddress);
+        balance.setPhase(phase);
+        balance.setAsset("COMMERCIAL_BANK_MONEY");
+        balance.setDenomination("GBP");
+        balance.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        balance.setUpdatePostingInstructionBatchId("");
+        balance.setValueTime(DEFAULT_VALUE_TIME);
+        balance.setAmount(new BigDecimal(amount));
+        balance.setTotalDebit("0.00");
+        balance.setTotalCredit(amount);
+        return balance;
+    }
+
+    /**
+     * Creates a regular account balance
+     */
+    private static Balance createRegularBalance(String accountAddress, String amount) {
+        Balance balance = new Balance();
+        balance.setId("reg_balance_" + UUID.randomUUID());
+        balance.setAccountId(REGULAR_ACCOUNT_ID);
+        balance.setAccountAddress(accountAddress);
+        balance.setPhase(COMMITTED_PHASE);
+        balance.setAsset("COMMERCIAL_BANK_MONEY");
+        balance.setDenomination("GBP");
+        balance.setPostingInstructionBatchId("reg-batch-" + UUID.randomUUID());
+        balance.setUpdatePostingInstructionBatchId("");
+        balance.setValueTime(DEFAULT_VALUE_TIME);
+        balance.setAmount(new BigDecimal(amount));
+        balance.setTotalDebit("0.00");
+        balance.setTotalCredit(amount);
+        return balance;
+    }
+
+    /**
+     * Creates PBL Account KTable entry
+     */
+    public static AccountKTable getPBLAccountKTable() {
+        AccountKTable accountKTable = new AccountKTable();
+        accountKTable.setEventId("pbl_event_" + UUID.randomUUID());
+        accountKTable.setAccountId(PBL_ACCOUNT_ID);
+        accountKTable.setAccountType("LOAN");
+        accountKTable.setProductCode(PBL_PRODUCT_CODE);
+        accountKTable.setBrandId("PBL");
+        accountKTable.setSortCode(PBL_SORT_CODE);
+        accountKTable.setAccountStatus("ACCOUNT_UPDATE_STATUS_COMPLETED");
+        accountKTable.setAccountNo(PBL_ACCOUNT_NUMBER);
+        accountKTable.setOpeningDate("2020-01-15");
+        accountKTable.setMaturityDate("2030-01-15");
+        accountKTable.setNpaFlag("N");
+        accountKTable.setPaymentDeviceTags("PBL_DEVICE");
+        accountKTable.setPaymentDeviceLinkStartTimestamp("2020-01-15T00:00:00Z");
+        accountKTable.setPaymentDeviceLinkEndTimestamp("2030-01-15T23:59:59Z");
+        return accountKTable;
+    }
+
+    /**
+     * Creates Regular Account KTable entry (for comparison)
+     */
+    public static AccountKTable getRegularAccountKTable() {
+        AccountKTable accountKTable = new AccountKTable();
+        accountKTable.setEventId("reg_event_" + UUID.randomUUID());
+        accountKTable.setAccountId(REGULAR_ACCOUNT_ID);
+        accountKTable.setAccountType("SAVINGS");
+        accountKTable.setProductCode(REGULAR_PRODUCT_CODE);
+        accountKTable.setBrandId("REG");
+        accountKTable.setSortCode(REGULAR_SORT_CODE);
+        accountKTable.setAccountStatus("ACCOUNT_UPDATE_STATUS_COMPLETED");
+        accountKTable.setAccountNo(REGULAR_ACCOUNT_NUMBER);
+        accountKTable.setOpeningDate("2021-05-20");
+        accountKTable.setMaturityDate("2026-05-20");
+        accountKTable.setNpaFlag("N");
+        accountKTable.setPaymentDeviceTags(null);
+        accountKTable.setPaymentDeviceLinkStartTimestamp(null);
+        accountKTable.setPaymentDeviceLinkEndTimestamp(null);
+        return accountKTable;
+    }
+
+    /**
+     * Creates mock PBL AccountBalanceEvent for successful transformation
+     */
+    public static List<AccountBalanceEvent> buildMockPBLAccountBalanceEvent() {
+        // Create EventIdentifier
+        EventIdentifier eventIdentifier = EventIdentifier.newBuilder()
+                .setEventId(UUID.randomUUID().toString())
+                .setEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        // Create SourceEventIdentifier
+        SourceEventIdentifier sourceEventIdentifier = SourceEventIdentifier.newBuilder()
+                .setSourceEventId(generateUniqueEventId())
+                .setSourceSystem(SourceSystem.VAULT_CORE)
+                .setSourceEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        // Create EventMetadata
+        EventMetadata eventMetadata = EventMetadata.newBuilder()
+                .setEventIdentifier(eventIdentifier)
+                .setSourceEventIdentifier(sourceEventIdentifier)
+                .setCorrelationId(generateUniqueEventId())
+                .build();
+
+        // Create Balance
+        com.lbg.banking.accountbalance.Balance balance = com.lbg.banking.accountbalance.Balance.newBuilder()
+                .setBalanceId("pbl_balance_" + UUID.randomUUID())
+                .setCurrency("GBP")
+                .setAmount(5000.0)
+                .setType(BalanceType.LEDGER_BALANCE)
+                .build();
+
+        // Create AccountBalance
+        AccountBalance accountBalance = AccountBalance.newBuilder()
+                .setAccountId(PBL_ACCOUNT_ID)
+                .setSortCode(PBL_SORT_CODE)
+                .setAccountNumber(PBL_ACCOUNT_NUMBER)
+                .setTransactionId(PBL_POSTING_BATCH_ID)
+                .setTransactionDate(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .setBalance(balance)
+                .build();
+
+        // Build PBL AccountBalanceEvent
+        AccountBalanceEvent pblEvent = AccountBalanceEvent.newBuilder()
+                .setAccountBalanceEventSubject(PBL_ACCOUNT_BALANCE_EVENT_SUBJECT)
+                .setEventMetadata(eventMetadata)
+                .setAccountBalance(accountBalance)
+                .setSourceEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        return List.of(pblEvent);
+    }
+
+    /**
+     * Creates mock Regular AccountBalanceEvent for comparison
+     */
+    public static List<AccountBalanceEvent> buildMockRegularAccountBalanceEvent() {
+        // Create EventIdentifier
+        EventIdentifier eventIdentifier = EventIdentifier.newBuilder()
+                .setEventId(UUID.randomUUID().toString())
+                .setEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        // Create SourceEventIdentifier
+        SourceEventIdentifier sourceEventIdentifier = SourceEventIdentifier.newBuilder()
+                .setSourceEventId(REGULAR_ACCOUNT_ID + "_event")
+                .setSourceSystem(SourceSystem.VAULT_CORE)
+                .setSourceEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        // Create EventMetadata
+        EventMetadata eventMetadata = EventMetadata.newBuilder()
+                .setEventIdentifier(eventIdentifier)
+                .setSourceEventIdentifier(sourceEventIdentifier)
+                .setCorrelationId(REGULAR_ACCOUNT_ID + "_event")
+                .build();
+
+        // Create Balance
+        com.lbg.banking.accountbalance.Balance balance = com.lbg.banking.accountbalance.Balance.newBuilder()
+                .setBalanceId("reg_balance_" + UUID.randomUUID())
+                .setCurrency("GBP")
+                .setAmount(2000.0)
+                .setType(BalanceType.LEDGER_BALANCE)
+                .build();
+
+        // Create AccountBalance
+        AccountBalance accountBalance = AccountBalance.newBuilder()
+                .setAccountId(REGULAR_ACCOUNT_ID)
+                .setSortCode(REGULAR_SORT_CODE)
+                .setAccountNumber(REGULAR_ACCOUNT_NUMBER)
+                .setTransactionId("reg-batch-" + UUID.randomUUID())
+                .setTransactionDate(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .setBalance(balance)
+                .build();
+
+        // Build Regular AccountBalanceEvent
+        AccountBalanceEvent regularEvent = AccountBalanceEvent.newBuilder()
+                .setAccountBalanceEventSubject(ACCOUNT_BALANCE_EVENT_SUBJECT)
+                .setEventMetadata(eventMetadata)
+                .setAccountBalance(accountBalance)
+                .setSourceEventTimestamp(Timestamp.newBuilder()
+                        .setSeconds(Instant.now().getEpochSecond())
+                        .setNanos(Instant.now().getNano())
+                        .build())
+                .build();
+
+        return List.of(regularEvent);
+    }
+
+    /**
+     * Creates PBL Balance Event with specific balance types for testing
+     */
+    public static BalanceEvent createPBLBalanceEventWithBalanceTypes(String... balanceTypes) {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+
+        List<Balance> balances = new ArrayList<>();
+        for (int i = 0; i < balanceTypes.length; i++) {
+            String amount = String.valueOf((i + 1) * 100) + ".00";
+            balances.add(createPBLBalance(balanceTypes[i], amount));
+        }
+        event.setBalances(balances);
+
+        return event;
+    }
+
+    /**
+     * Creates PBL event with empty balances list
+     */
+    public static BalanceEvent pblEventWithEmptyBalances() {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setBalances(new ArrayList<>());
+        return event;
+    }
+
+    /**
+     * Creates PBL event with null balances
+     */
+    public static BalanceEvent pblEventWithNullBalances() {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setBalances(null);
+        return event;
+    }
+
+    /**
+     * Creates PBL event with mismatched posting instruction batch ID
+     */
+    public static BalanceEvent pblEventWithMismatchedBatchId() {
+        BalanceEvent event = validPBLBalanceEvent();
+        // Create balance with different batch ID
+        Balance balance = createPBLBalance("DEFAULT", "1000.00");
+        balance.setPostingInstructionBatchId("different-batch-id-" + UUID.randomUUID());
+        event.setBalances(List.of(balance));
+        return event;
+    }
+
+    /**
+     * Creates test data for buffer size limit testing
+     */
+    public static List<BalanceEvent> createMultiplePBLEventsForBuffering(int count) {
+        List<BalanceEvent> events = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            BalanceEvent event = validPBLBalanceEvent();
+            event.setEventId(PBL_ACCOUNT_ID + "_buffering_event_" + i);
+            event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID + "_" + i);
+            // Update balance batch ID to match event
+            event.getBalances().get(0).setPostingInstructionBatchId(event.getPostingInstructionBatchId());
+            events.add(event);
+        }
+        return events;
+    }
+
+    /**
+     * Creates PBL event with specific amount
+     */
+    public static BalanceEvent createPBLEventWithAmount(String amount) {
+        BalanceEvent event = validPBLBalanceEvent();
+        Balance balance = event.getBalances().get(0);
+        balance.setAmount(new BigDecimal(amount));
+        balance.setTotalCredit(amount);
+        return event;
+    }
+
+    /**
+     * Creates PBL event with specific timestamp
+     */
+    public static BalanceEvent createPBLEventWithTimestamp(String timestamp) {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventTimestamp(timestamp);
+        event.getBalances().get(0).setValueTime(timestamp);
+        return event;
+    }
+
+    /**
+     * Creates PBL event with special characters in account ID
+     */
+    public static BalanceEvent createPBLEventWithSpecialCharacters(String accountId) {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setAccountId(accountId);
+        event.getBalances().get(0).setAccountId(accountId);
+        return event;
+    }
+
+    /**
+     * Creates PBL event for retry testing with specific retry count
+     */
+    public static BalanceEvent createPBLEventForRetryTesting() {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventId(PBL_ACCOUNT_ID + "_retry_test_" + UUID.randomUUID());
+        return event;
+    }
+
+    /**
+     * Creates PBL event for DLQ testing
+     */
+    public static BalanceEvent createPBLEventForDLQTesting() {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventId(PBL_ACCOUNT_ID + "_dlq_test_" + UUID.randomUUID());
+        return event;
+    }
+
+    /**
+     * Creates PBL event with all valid balance address types
+     */
+    public static BalanceEvent createPBLEventWithAllValidBalanceTypes() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+
+        List<Balance> balances = new ArrayList<>();
+        for (int i = 0; i < VALID_BALANCE_ADDRESSES.length; i++) {
+            String amount = String.valueOf((i + 1) * 500) + ".00";
+            balances.add(createPBLBalance(VALID_BALANCE_ADDRESSES[i], amount));
+        }
+        event.setBalances(balances);
+
+        return event;
+    }
+
+    /**
+     * Creates PBL event with all invalid balance address types
+     */
+    public static BalanceEvent createPBLEventWithAllInvalidBalanceTypes() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+
+        List<Balance> balances = new ArrayList<>();
+        for (int i = 0; i < INVALID_BALANCE_ADDRESSES.length; i++) {
+            String amount = String.valueOf((i + 1) * 100) + ".00";
+            balances.add(createPBLBalance(INVALID_BALANCE_ADDRESSES[i], amount));
+        }
+        event.setBalances(balances);
+
+        return event;
+    }
+
+    /**
+     * Creates PBL event with mixed valid and invalid phases
+     */
+    public static BalanceEvent createPBLEventWithMixedPhases() {
+        BalanceEvent event = new BalanceEvent();
+        event.setEventId(generateUniqueEventId());
+        event.setAccountId(PBL_ACCOUNT_ID);
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID);
+        event.setEventTimestamp(DEFAULT_TIMESTAMP);
+        event.setProductCode(PBL_PRODUCT_CODE);
+
+        List<Balance> balances = new ArrayList<>();
+        balances.add(createPBLBalance("DEFAULT", "1000.00", COMMITTED_PHASE)); // Valid
+        balances.add(createPBLBalance("DEFAULT", "500.00", PENDING_PHASE));    // Invalid
+        balances.add(createPBLBalance("ACCRUED_INCOMING", "200.00", COMMITTED_PHASE)); // Valid
+        balances.add(createPBLBalance("ACCRUED_INCOMING", "100.00", CANCELLED_PHASE)); // Invalid
+
+        event.setBalances(balances);
+        return event;
+    }
+
+    /**
+     * Creates PBL event for concurrent processing test
+     */
+    public static BalanceEvent createPBLEventForConcurrentTest(String suffix) {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventId(PBL_ACCOUNT_ID + "_concurrent_" + suffix);
+        event.setAccountId(PBL_ACCOUNT_ID + "_" + suffix);
+        return event;
+    }
+
+    /**
+     * Creates PBL account KTable for concurrent testing
+     */
+    public static AccountKTable createPBLAccountForConcurrentTest(String suffix) {
+        AccountKTable account = getPBLAccountKTable();
+        account.setAccountId(PBL_ACCOUNT_ID + "_" + suffix);
+        account.setAccountNo(PBL_ACCOUNT_NUMBER + suffix);
+        return account;
+    }
+
+    /**
+     * Utility method to generate unique event IDs
+     */
+    private static String generateUniqueEventId() {
+        return PBL_ACCOUNT_ID + "_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+    }
+
+    /**
+     * Creates balance event with inconsistent data for edge case testing
+     */
+    public static BalanceEvent createPBLEventWithInconsistentData() {
+        BalanceEvent event = validPBLBalanceEvent();
+        Balance balance = event.getBalances().get(0);
+        
+        // Create data inconsistency
+        balance.setAmount(new BigDecimal("100.00"));
+        balance.setTotalCredit("200.00");  // Different from amount
+        balance.setTotalDebit("50.00");    // Non-zero debit
+        
+        return event;
+    }
+
+    /**
+     * Creates PBL event with boundary timestamp values
+     */
+    public static BalanceEvent createPBLEventWithBoundaryTimestamps(String eventTimestamp, String valueTimestamp) {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventTimestamp(eventTimestamp);
+        event.getBalances().get(0).setValueTime(valueTimestamp);
+        return event;
+    }
+
+    /**
+     * Creates PBL account with minimal required fields only
+     */
+    public static AccountKTable createMinimalPBLAccount() {
+        AccountKTable account = new AccountKTable();
+        account.setEventId("minimal_pbl_event");
+        account.setAccountId(PBL_ACCOUNT_ID);
+        account.setProductCode(PBL_PRODUCT_CODE);
+        account.setSortCode(PBL_SORT_CODE);
+        account.setAccountNo(PBL_ACCOUNT_NUMBER);
+        account.setAccountStatus("ACCOUNT_UPDATE_STATUS_COMPLETED");
+        // All other fields left as null
+        return account;
+    }
+
+    /**
+     * Creates PBL event for performance testing
+     */
+    public static BalanceEvent createPBLEventForPerformanceTest(int index) {
+        BalanceEvent event = validPBLBalanceEvent();
+        event.setEventId(PBL_ACCOUNT_ID + "_perf_test_" + String.format("%06d", index));
+        event.setPostingInstructionBatchId(PBL_POSTING_BATCH_ID + "_perf_" + index);
+        event.getBalances().get(0).setPostingInstructionBatchId(event.getPostingInstructionBatchId());
+        event.getBalances().get(0).setAmount(new BigDecimal(String.valueOf(1000 + index)));
+        return event;
+    }
+
+    /**
+     * Validates if a balance event is for PBL account
+     */
+    public static boolean isPBLEvent(BalanceEvent event) {
+        return PBL_PRODUCT_CODE.equals(event.getProductCode());
+    }
+
+    /**
+     * Validates if an AccountBalanceEvent is for PBL
+     */
+    public static boolean isPBLAccountBalanceEvent(AccountBalanceEvent event) {
+        return PBL_ACCOUNT_BALANCE_EVENT_SUBJECT.equals(event.getAccountBalanceEventSubject());
+    }
+
+    /**
+     * Creates a list of sample PBL events for batch testing
+     */
+    public static List<BalanceEvent> createSamplePBLEvents(int count) {
+        List<BalanceEvent> events = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            BalanceEvent event = validPBLBalanceEvent();
+            event.setEventId(PBL_ACCOUNT_ID + "_sample_" + i);
+            events.add(event);
+        }
+        return events;
+    }
+}

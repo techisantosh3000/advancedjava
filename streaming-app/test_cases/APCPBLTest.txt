@@ -1,0 +1,474 @@
+package com.lbg.corebanking.streaming.accbalance.consumer;
+
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.lbg.banking.accountbalance.AccountBalanceEvent;
+import com.lbg.corebanking.streaming.accbalance.audit.AuditMessagePublisher;
+import com.lbg.corebanking.streaming.accbalance.config.Config;
+import com.lbg.corebanking.streaming.accbalance.constants.MessageConstants;
+import com.lbg.corebanking.streaming.accbalance.exception.AccountBalancePubNonRetriableException;
+import com.lbg.corebanking.streaming.accbalance.exception.AccountBalancePubRetriableException;
+import com.lbg.corebanking.streaming.accbalance.exception.StreamsDeserializationExceptionHandler;
+import com.lbg.corebanking.streaming.accbalance.model.AccountKTable;
+import com.lbg.corebanking.streaming.accbalance.model.BalanceEvent;
+import com.lbg.corebanking.streaming.accbalance.serde.SerdeUtils;
+import com.lbg.corebanking.streaming.accbalance.service.AccountBalanceHelper;
+import com.lbg.corebanking.streaming.accbalance.transformer.GDMTransformer;
+import com.lbg.corebanking.streaming.accbalance.util.AccountBalancePublishingUtil;
+import io.confluent.kafka.schemaregistry.client.MockSchemaRegistryClient;
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.streams.serdes.protobuf.KafkaProtobufSerde;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.*;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.test.TestRecord;
+import org.junit.jupiter.api.*;
+import org.mockito.*;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.kafka.config.StreamsBuilderFactoryBean;
+import org.springframework.kafka.support.serializer.JsonSerde;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.*;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
+
+@Tag("unittest")
+@SpringBootTest
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+class AccountBalancePublisherConsumerPBLTest {
+
+    @Mock
+    private Config config;
+
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private StreamsBuilderFactoryBean accountKStreamConfigs;
+
+    @Mock
+    private AuditMessagePublisher auditMessagePublisher;
+
+    @Mock
+    private GDMTransformer<AccountBalanceEvent> mockGDMTransformer;
+
+    @InjectMocks
+    private AccountBalancePublisherConsumer abPublisherConsumer;
+
+    private TopologyTestDriver testDriver;
+    private TestInputTopic<String, BalanceEvent> inputTopic;
+    private TestOutputTopic<String, AccountBalanceEvent> outputTopicRegular;
+    private TestOutputTopic<String, AccountBalanceEvent> outputTopicPBL;
+    private TestInputTopic<String, Object> accountStateStoreTopic;
+    private TestOutputTopic<String, BalanceEvent> balanceRetryTestOutputTopic;
+    private TestOutputTopic<String, BalanceEvent> balanceDLQTestOutputTopic;
+
+    private MockSchemaRegistryClient schemaRegistry = new MockSchemaRegistryClient();
+    @Spy
+    private KafkaProtobufSerde<AccountBalanceEvent> protobufSerde = new KafkaProtobufSerde<>(schemaRegistry, AccountBalanceEvent.class);
+
+    private AccountBalanceHelper mockAccountBalanceHelper;
+
+    public enum TestScenario {
+        SUCCESS,
+        NON_RETRIABLE_ERROR,
+        RETRIABLE_ERROR
+    }
+
+    @BeforeEach
+    void setUp() throws IOException {
+        MockitoAnnotations.openMocks(this);
+        init(TestScenario.SUCCESS);
+    }
+
+    public void init(TestScenario scenario) throws IOException {
+        Map<String, String> serdeConfig = new HashMap<>();
+        serdeConfig.put(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, "http://localhost:8081");
+        protobufSerde.configure(serdeConfig, false);
+
+        getMockConfig();
+        setupTestScenario(scenario);
+
+        abPublisherConsumer = new AccountBalancePublisherConsumer(config, mockAccountBalanceHelper, auditMessagePublisher);
+        ReflectionTestUtils.setField(abPublisherConsumer, "accountBalanceEventKafkaProtobufSerde", protobufSerde);
+        ReflectionTestUtils.setField(abPublisherConsumer, "transactionsKStreamConfigs", accountKStreamConfigs);
+
+        when(accountKStreamConfigs.getKafkaStreams().store(any())).thenReturn(getReadOnlyKeyValueStore());
+
+        StreamsBuilder streamsBuilder = new StreamsBuilder();
+        abPublisherConsumer.process(streamsBuilder);
+
+        Topology topology = streamsBuilder.build();
+        testDriver = new TopologyTestDriver(topology, getProps());
+
+        inputTopic = testDriver.createInputTopic(
+            config.getAccountBalanceSourceTopic().get(0),
+            Serdes.String().serializer(),
+            SerdeUtils.createSerde(BalanceEvent.class).serializer()
+        );
+
+        accountStateStoreTopic = testDriver.createInputTopic(
+            config.getAccountStateStoreTopic(),
+            Serdes.String().serializer(),
+            SerdeUtils.createSerde(Object.class).serializer()
+        );
+
+        outputTopicRegular = testDriver.createOutputTopic(
+            config.getAccBalanceConsumableTopic(),
+            Serdes.String().deserializer(),
+            protobufSerde.deserializer()
+        );
+
+        outputTopicPBL = testDriver.createOutputTopic(
+            config.getAccBalancePBLConsumableTopic(),
+            Serdes.String().deserializer(),
+            protobufSerde.deserializer()
+        );
+
+        balanceRetryTestOutputTopic = testDriver.createOutputTopic(
+            config.getAccountBalRetryTopic(),
+            Serdes.String().deserializer(),
+            new JsonSerde<>(BalanceEvent.class).deserializer()
+        );
+
+        balanceDLQTestOutputTopic = testDriver.createOutputTopic(
+            config.getAccountBalDLQTopic(),
+            Serdes.String().deserializer(),
+            new JsonSerde<>(BalanceEvent.class).deserializer()
+        );
+    }
+
+    private void setupTestScenario(TestScenario scenario) {
+        mockGDMTransformer = mock(GDMTransformer.class);
+        mockAccountBalanceHelper = mock(AccountBalanceHelper.class);
+
+        switch (scenario) {
+            case NON_RETRIABLE_ERROR:
+                when(mockAccountBalanceHelper.modifyAndPublishForAccountBalanceTuple(any()))
+                    .thenAnswer(invocation -> {
+                        org.apache.kafka.streams.kstream.KStream<String, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent>> inputStream = 
+                            invocation.getArgument(0);
+                        return inputStream.mapValues((String key, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent> tuple) -> {
+                            Exception exception = new AccountBalancePubNonRetriableException("Non-retriable transformation error");
+                            return new com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<>(
+                                Optional.of(AccountBalancePublishingUtil.raiseAnException(exception, "Non-retriable error")),
+                                AccountBalanceEvent.newBuilder().build(),
+                                tuple.getOriginalMessage()
+                            );
+                        });
+                    });
+                break;
+
+            case RETRIABLE_ERROR:
+                when(mockAccountBalanceHelper.modifyAndPublishForAccountBalanceTuple(any()))
+                    .thenAnswer(invocation -> {
+                        org.apache.kafka.streams.kstream.KStream<String, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent>> inputStream = 
+                            invocation.getArgument(0);
+                        return inputStream.mapValues((String key, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent> tuple) -> {
+                            Exception exception = new AccountBalancePubRetriableException("Retriable transformation error");
+                            return new com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<>(
+                                Optional.of(AccountBalancePublishingUtil.raiseAnException(exception, "Retriable error")),
+                                AccountBalanceEvent.newBuilder().build(),
+                                tuple.getOriginalMessage()
+                            );
+                        });
+                    });
+                break;
+
+            case SUCCESS:
+            default:
+                when(mockAccountBalanceHelper.modifyAndPublishForAccountBalanceTuple(any()))
+                    .thenAnswer(invocation -> {
+                        org.apache.kafka.streams.kstream.KStream<String, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent>> inputStream = 
+                            invocation.getArgument(0);
+                        return inputStream.flatMapValues((String key, com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<BalanceEvent, BalanceEvent> tuple) -> {
+                            String productCode = tuple.getOriginalMessage().getProductCode();
+                            List<AccountBalanceEvent> events = PBLTestData.buildMockAccountBalanceEvent(productCode);
+                            return events.stream()
+                                .map(event -> new com.lbg.corebanking.streaming.accbalance.model.Tuple4KStreamDLQ<>(
+                                    Optional.empty(),
+                                    event,
+                                    tuple.getOriginalMessage()
+                                ))
+                                .toList();
+                        });
+                    });
+                break;
+        }
+    }
+
+    @AfterEach
+    public void tearDown() {
+        if (testDriver != null) {
+            testDriver.close();
+        }
+        Mockito.reset(config, accountKStreamConfigs, auditMessagePublisher, mockGDMTransformer, mockAccountBalanceHelper);
+    }
+
+    @Test
+    @Order(1)
+    @DisplayName("Test PBL event routing to PBL topic")
+    void testPBLEventRouting() {
+        // Create PBL balance event
+        BalanceEvent pblEvent = PBLTestData.createPBLBalanceEvent();
+        
+        // Add PBL account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, pblEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify PBL event goes to PBL topic
+        assertFalse(outputTopicPBL.isEmpty(), "PBL event should go to PBL topic");
+        assertEquals(1, outputTopicPBL.getQueueSize(), "Should have one PBL event");
+        
+        // Verify no events in regular topic
+        assertTrue(outputTopicRegular.isEmpty(), "Regular topic should be empty");
+        
+        // Verify no error events
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "No retry should occur");
+        assertTrue(balanceDLQTestOutputTopic.isEmpty(), "No DLQ should occur");
+    }
+
+    @Test
+    @Order(2)
+    @DisplayName("Test regular event routing to regular topic")
+    void testRegularEventRouting() {
+        // Create regular balance event
+        BalanceEvent regularEvent = PBLTestData.createRegularBalanceEvent();
+        
+        // Add regular account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.REGULAR_ACCOUNT_ID, PBLTestData.getRegularAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(PBLTestData.REGULAR_ACCOUNT_ID, regularEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify regular event goes to regular topic
+        assertFalse(outputTopicRegular.isEmpty(), "Regular event should go to regular topic");
+        assertEquals(1, outputTopicRegular.getQueueSize(), "Should have one regular event");
+        
+        // Verify no events in PBL topic
+        assertTrue(outputTopicPBL.isEmpty(), "PBL topic should be empty");
+        
+        // Verify no error events
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "No retry should occur");
+        assertTrue(balanceDLQTestOutputTopic.isEmpty(), "No DLQ should occur");
+    }
+
+    @Test
+    @Order(3)
+    @DisplayName("Test PBL non-retriable transformation error")
+    void testPBLNonRetriableTransformationError() throws IOException {
+        // Reinitialize with error scenario
+        tearDown();
+        init(TestScenario.NON_RETRIABLE_ERROR);
+        
+        // Create PBL balance event
+        BalanceEvent pblEvent = PBLTestData.createPBLBalanceEvent();
+        
+        // Add PBL account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, pblEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify no successful processing occurred
+        assertTrue(outputTopicPBL.isEmpty(), "No successful processing should occur for non-retriable error");
+        assertTrue(outputTopicRegular.isEmpty(), "No successful processing should occur for non-retriable error");
+        
+        // Verify it went to DLQ topic
+        assertFalse(balanceDLQTestOutputTopic.isEmpty(), "Event should be sent to DLQ for non-retriable error");
+        
+        // Verify no retry occurred
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "No retry should occur for non-retriable error");
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("Test PBL retriable transformation error with retry")
+    void testPBLRetriableTransformationErrorWithRetry() throws IOException {
+        // Reinitialize with retriable error scenario
+        tearDown();
+        init(TestScenario.RETRIABLE_ERROR);
+        
+        // Create PBL balance event
+        BalanceEvent pblEvent = PBLTestData.createPBLBalanceEvent();
+        
+        // Add PBL account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, pblEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify no successful processing occurred initially
+        assertTrue(outputTopicPBL.isEmpty(), "No successful processing should occur on first attempt");
+        assertTrue(outputTopicRegular.isEmpty(), "No successful processing should occur on first attempt");
+        
+        // Verify it went to retry topic
+        assertFalse(balanceRetryTestOutputTopic.isEmpty(), "Event should be sent to retry topic");
+        
+        // Verify retry event details
+        KeyValue<String, BalanceEvent> retryEvent = balanceRetryTestOutputTopic.readKeyValue();
+        assertNotNull(retryEvent, "Retry event should exist");
+        assertEquals(PBLTestData.PBL_ACCOUNT_ID, retryEvent.key, "Retry event key should match");
+    }
+
+    @Test
+    @Order(5)
+    @DisplayName("Test PBL retry exhausted")
+    void testPBLRetryExhausted() throws IOException {
+        // Reinitialize with retriable error scenario and max retries = 0
+        tearDown();
+        init(TestScenario.RETRIABLE_ERROR);
+        when(config.getAccountBalMaxRetryCount()).thenReturn(0); // Force retry exhaustion
+        
+        // Create PBL balance event with retry header
+        BalanceEvent pblEvent = PBLTestData.createPBLBalanceEvent();
+        Headers headers = new RecordHeaders();
+        headers.add(MessageConstants.RETRY_COUNT, "1".getBytes(StandardCharsets.UTF_8));
+        TestRecord<String, BalanceEvent> testRecord = new TestRecord<>(
+            PBLTestData.PBL_ACCOUNT_ID, pblEvent, headers);
+        
+        // Add PBL account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(testRecord);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify no successful processing occurred
+        assertTrue(outputTopicPBL.isEmpty(), "No successful processing should occur when retries exhausted");
+        assertTrue(outputTopicRegular.isEmpty(), "No successful processing should occur when retries exhausted");
+        
+        // Verify it went to DLQ when retries exhausted
+        assertFalse(balanceDLQTestOutputTopic.isEmpty(), "Event should be sent to DLQ when retries exhausted");
+        
+        // Verify no more retries
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "No more retries should occur");
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("Test mixed product code events routing")
+    void testMixedProductCodeEvents() {
+        // Create regular and PBL events
+        BalanceEvent regularEvent = PBLTestData.createRegularBalanceEvent();
+        BalanceEvent pblEvent = PBLTestData.createPBLBalanceEvent();
+        
+        // Add accounts to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.REGULAR_ACCOUNT_ID, PBLTestData.getRegularAccountKTable());
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process both events
+        inputTopic.pipeInput(PBLTestData.REGULAR_ACCOUNT_ID, regularEvent);
+        inputTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, pblEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(200));
+        
+        // Verify regular event goes to regular topic
+        assertEquals(1, outputTopicRegular.getQueueSize(), "Regular event should go to regular topic");
+        
+        // Verify PBL event goes to PBL topic
+        assertEquals(1, outputTopicPBL.getQueueSize(), "PBL event should go to PBL topic");
+        
+        // Verify no error events
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "No retry should occur");
+        assertTrue(balanceDLQTestOutputTopic.isEmpty(), "No DLQ should occur");
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("Test event filtering based on balance criteria")
+    void testEventFiltering() {
+        // Create event that should be filtered out (wrong phase)
+        BalanceEvent filteredEvent = PBLTestData.createFilteredBalanceEvent();
+        
+        // Add account to state store
+        accountStateStoreTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+        
+        // Process the event
+        inputTopic.pipeInput(PBLTestData.PBL_ACCOUNT_ID, filteredEvent);
+        
+        // Advance time to ensure processing
+        testDriver.advanceWallClockTime(Duration.ofMillis(100));
+        
+        // Verify no events are processed
+        assertTrue(outputTopicPBL.isEmpty(), "Filtered event should not be processed");
+        assertTrue(outputTopicRegular.isEmpty(), "Filtered event should not be processed");
+        assertTrue(balanceRetryTestOutputTopic.isEmpty(), "Filtered event should not generate retry");
+        assertTrue(balanceDLQTestOutputTopic.isEmpty(), "Filtered event should not generate DLQ");
+    }
+
+    private Properties getProps() {
+        Properties props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "AccountBalancePBLStreamTest");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "testserver:9092");
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.put(StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, StreamsDeserializationExceptionHandler.class.getName());
+        return props;
+    }
+
+    private ReadOnlyKeyValueStore<String, AccountKTable> getReadOnlyKeyValueStore() {
+        return new ReadOnlyKeyValueStore<String, AccountKTable>() {
+            private final Map<String, AccountKTable> store = new HashMap<>();
+
+            {
+                // Pre-populate with test data
+                store.put(PBLTestData.PBL_ACCOUNT_ID, PBLTestData.getPBLAccountKTable());
+                store.put(PBLTestData.REGULAR_ACCOUNT_ID, PBLTestData.getRegularAccountKTable());
+            }
+
+            @Override
+            public AccountKTable get(String key) {
+                return store.get(key);
+            }
+
+            @Override
+            public KeyValueIterator<String, AccountKTable> range(String from, String to) {
+                return null;
+            }
+
+            @Override
+            public KeyValueIterator<String, AccountKTable> all() {
+                return null;
+            }
+
+            @Override
+            public long approximateNumEntries() {
+                return store.size();
+            }
+        };
+    }
+
+    private void getMockConfig() {
+        lenient().when(config.getAccountBalanceSourceTopic()).thenReturn(List.of("source_topic"));
+        lenient().when(config.getDlqTopic()).thenReturn("dlq_topic");
+        lenient().when(config.getAccBalanceConsumableTopic()).thenReturn("output_topic_regular");
+        lenient().when(config.getAccBalancePBLConsumableTopic()).thenReturn("output_topic_pbl");
+        lenient().when(config.getAccountStateStoreTopic()).thenReturn("store_topic");
+        lenient().when(config.getAccountBalRetryTopic()).thenReturn("source_retry_topic");
+        lenient().when(config.getAccountBalDLQTopic()).thenReturn("source_dlq_topic");
+        lenient().when(config.getAccountBalMaxRetryCount()).thenReturn(5);
+    }
+}

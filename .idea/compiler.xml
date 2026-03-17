@@ -16,6 +16,12 @@
       <directory url="file://$PROJECT_DIR$/security-analysis-v1/src/main/resources/archetype-resources" includeSubdirectories="true" />
       <directory url="file://$PROJECT_DIR$/spring-all-modules-v1/src/main/resources/archetype-resources" includeSubdirectories="true" />
       <directory url="file://$PROJECT_DIR$/java-ds-v1/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/javabdd/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/reactivejava/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/streaming-app/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/streaming-app-v1/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/streaming-app-v2/src/main/resources/archetype-resources" includeSubdirectories="true" />
+      <directory url="file://$PROJECT_DIR$/UnitTestCaseAnalysis/src/main/resources/archetype-resources" includeSubdirectories="true" />
     </excludeFromCompile>
     <annotationProcessing>
       <profile default="true" name="Default" enabled="true" />
@@ -24,10 +30,16 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="benchmarking" />
+        <module name="streaming-app-v1" />
         <module name="kafkaconsumer" />
+        <module name="javabdd" />
+        <module name="streaming-app-v2" />
+        <module name="streaming-app" />
         <module name="event-driven-service" />
         <module name="jobrunnner" />
         <module name="java11" />
+        <module name="hellocucumber" />
+        <module name="reactivejava" />
         <module name="spring-all-modules-v1" />
         <module name="java-ds-v1" />
         <module name="java8" />
@@ -36,22 +48,30 @@
         <module name="rest-endpoint-v1" />
         <module name="security-analysis-v1" />
         <module name="temporal" />
+        <module name="UnitTestCaseAnalysis" />
       </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
+      <module name="UnitTestCaseAnalysis" options="-parameters" />
       <module name="benchmarking" options="-parameters" />
       <module name="event-driven-service" options="-parameters" />
+      <module name="hellocucumber" options="-parameters" />
       <module name="java-ds-v1" options="-parameters" />
       <module name="java11" options="-parameters" />
       <module name="java8" options="-parameters" />
+      <module name="javabdd" options="-parameters" />
       <module name="jobrunnner" options="-parameters" />
       <module name="kafkaconsumer" options="-parameters" />
       <module name="mapstruct" options="-parameters" />
+      <module name="reactivejava" options="-parameters" />
       <module name="rest-endpoint-v1" options="-parameters" />
       <module name="security-analysis-v1" options="-parameters" />
       <module name="spring-all-modules-v1" options="-parameters" />
+      <module name="streaming-app" options="-parameters" />
+      <module name="streaming-app-v1" options="-parameters" />
+      <module name="streaming-app-v2" options="-parameters" />
       <module name="temporal" options="-parameters" />
       <module name="third-party-api" options="-parameters" />
     </option>

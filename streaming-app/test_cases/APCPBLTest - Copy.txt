@@ -1,0 +1,181 @@
+package com.lbg.corebanking.streaming.accbalance.consumer;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.DisplayName;
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * Integration verification test to ensure PBLTestData and test classes work together correctly
+ */
+class IntegrationVerificationTest {
+
+    @Test
+    @DisplayName("Verify PBLTestData Constants Are Accessible")
+    void verifyPBLTestDataConstants() {
+        // Verify all constants are accessible and have expected values
+        assertEquals("PBL123456789", PBLTestData.PBL_ACCOUNT_ID);
+        assertEquals("654321", PBLTestData.PBL_SORT_CODE);
+        assertEquals("87654321", PBLTestData.PBL_ACCOUNT_NUMBER);
+        assertEquals("9002", PBLTestData.PBL_PRODUCT_CODE);
+        assertEquals("Private Banking Loan Account Balance Event", PBLTestData.PBL_ACCOUNT_BALANCE_EVENT_SUBJECT);
+        assertEquals("Personal Savings Account Balance Event", PBLTestData.ACCOUNT_BALANCE_EVENT_SUBJECT);
+        
+        // Verify regular account constants for comparison
+        assertEquals("REG123456789", PBLTestData.REGULAR_ACCOUNT_ID);
+        assertEquals("123456", PBLTestData.REGULAR_SORT_CODE);
+        assertEquals("12345678", PBLTestData.REGULAR_ACCOUNT_NUMBER);
+        assertEquals("9001", PBLTestData.REGULAR_PRODUCT_CODE);
+    }
+
+    @Test
+    @DisplayName("Verify PBLTestData Methods Return Valid Objects")
+    void verifyPBLTestDataMethods() {
+        // Test valid PBL balance event
+        var pblEvent = PBLTestData.validPBLBalanceEvent();
+        assertNotNull(pblEvent);
+        assertEquals(PBLTestData.PBL_ACCOUNT_ID, pblEvent.getAccountId());
+        assertEquals(PBLTestData.PBL_PRODUCT_CODE, pblEvent.getProductCode());
+        assertNotNull(pblEvent.getBalances());
+        assertFalse(pblEvent.getBalances().isEmpty());
+
+        // Test PBL account KTable
+        var pblAccount = PBLTestData.getPBLAccountKTable();
+        assertNotNull(pblAccount);
+        assertEquals(PBLTestData.PBL_ACCOUNT_ID, pblAccount.getAccountId());
+        assertEquals(PBLTestData.PBL_PRODUCT_CODE, pblAccount.getProductCode());
+        assertEquals(PBLTestData.PBL_SORT_CODE, pblAccount.getSortCode());
+        assertEquals(PBLTestData.PBL_ACCOUNT_NUMBER, pblAccount.getAccountNo());
+
+        // Test regular account for comparison
+        var regularEvent = PBLTestData.validRegularBalanceEvent();
+        assertNotNull(regularEvent);
+        assertEquals(PBLTestData.REGULAR_ACCOUNT_ID, regularEvent.getAccountId());
+        assertEquals(PBLTestData.REGULAR_PRODUCT_CODE, regularEvent.getProductCode());
+
+        var regularAccount = PBLTestData.getRegularAccountKTable();
+        assertNotNull(regularAccount);
+        assertEquals(PBLTestData.REGULAR_ACCOUNT_ID, regularAccount.getAccountId());
+        assertEquals(PBLTestData.REGULAR_PRODUCT_CODE, regularAccount.getProductCode());
+    }
+
+    @Test
+    @DisplayName("Verify Mock AccountBalanceEvent Generation")
+    void verifyMockAccountBalanceEventGeneration() {
+        var mockPBLEvents = PBLTestData.buildMockPBLAccountBalanceEvent();
+        assertNotNull(mockPBLEvents);
+        assertFalse(mockPBLEvents.isEmpty());
+        
+        var pblEvent = mockPBLEvents.get(0);
+        assertEquals(PBLTestData.PBL_ACCOUNT_BALANCE_EVENT_SUBJECT, pblEvent.getAccountBalanceEventSubject());
+        assertEquals(PBLTestData.PBL_ACCOUNT_ID, pblEvent.getAccountBalance().getAccountId());
+        assertEquals(PBLTestData.PBL_SORT_CODE, pblEvent.getAccountBalance().getSortCode());
+        assertEquals(PBLTestData.PBL_ACCOUNT_NUMBER, pblEvent.getAccountBalance().getAccountNumber());
+
+        var mockRegularEvents = PBLTestData.buildMockRegularAccountBalanceEvent();
+        assertNotNull(mockRegularEvents);
+        assertFalse(mockRegularEvents.isEmpty());
+        
+        var regularEvent = mockRegularEvents.get(0);
+        assertEquals(PBLTestData.ACCOUNT_BALANCE_EVENT_SUBJECT, regularEvent.getAccountBalanceEventSubject());
+        assertEquals(PBLTestData.REGULAR_ACCOUNT_ID, regularEvent.getAccountBalance().getAccountId());
+    }
+
+    @Test
+    @DisplayName("Verify Edge Case Data Creation")
+    void verifyEdgeCaseDataCreation() {
+        // Test multiple balance types
+        var multiBalanceEvent = PBLTestData.validPBLBalanceEventWithMultipleBalances();
+        assertNotNull(multiBalanceEvent);
+        assertTrue(multiBalanceEvent.getBalances().size() > 1);
+
+        // Test invalid event
+        var invalidEvent = PBLTestData.invalidPBLBalanceEvent();
+        assertNotNull(invalidEvent);
+        assertNotNull(invalidEvent.getBalances());
+
+        // Test empty balances
+        var emptyBalanceEvent = PBLTestData.pblEventWithEmptyBalances();
+        assertNotNull(emptyBalanceEvent);
+        assertTrue(emptyBalanceEvent.getBalances().isEmpty());
+
+        // Test null balances
+        var nullBalanceEvent = PBLTestData.pblEventWithNullBalances();
+        assertNotNull(nullBalanceEvent);
+        assertNull(nullBalanceEvent.getBalances());
+
+        // Test buffering events
+        var bufferingEvents = PBLTestData.createMultiplePBLEventsForBuffering(5);
+        assertNotNull(bufferingEvents);
+        assertEquals(5, bufferingEvents.size());
+    }
+
+    @Test
+    @DisplayName("Verify Balance Creation Utilities")
+    void verifyBalanceCreationUtilities() {
+        // Test specific balance types
+        String[] balanceTypes = {"DEFAULT", "ACCRUED_INCOMING", "ARREAR_BALANCE"};
+        var eventWithTypes = PBLTestData.createPBLBalanceEventWithBalanceTypes(balanceTypes);
+        assertNotNull(eventWithTypes);
+        assertEquals(balanceTypes.length, eventWithTypes.getBalances().size());
+
+        // Test all valid balance types
+        var allValidEvent = PBLTestData.createPBLEventWithAllValidBalanceTypes();
+        assertNotNull(allValidEvent);
+        assertEquals(PBLTestData.VALID_BALANCE_ADDRESSES.length, allValidEvent.getBalances().size());
+
+        // Test all invalid balance types
+        var allInvalidEvent = PBLTestData.createPBLEventWithAllInvalidBalanceTypes();
+        assertNotNull(allInvalidEvent);
+        assertEquals(PBLTestData.INVALID_BALANCE_ADDRESSES.length, allInvalidEvent.getBalances().size());
+    }
+
+    @Test
+    @DisplayName("Verify Helper Methods")
+    void verifyHelperMethods() {
+        var pblEvent = PBLTestData.validPBLBalanceEvent();
+        assertTrue(PBLTestData.isPBLEvent(pblEvent));
+
+        var regularEvent = PBLTestData.validRegularBalanceEvent();
+        assertFalse(PBLTestData.isPBLEvent(regularEvent));
+
+        var mockPBLAccountBalanceEvent = PBLTestData.buildMockPBLAccountBalanceEvent().get(0);
+        assertTrue(PBLTestData.isPBLAccountBalanceEvent(mockPBLAccountBalanceEvent));
+
+        var mockRegularAccountBalanceEvent = PBLTestData.buildMockRegularAccountBalanceEvent().get(0);
+        assertFalse(PBLTestData.isPBLAccountBalanceEvent(mockRegularAccountBalanceEvent));
+    }
+
+    @Test
+    @DisplayName("Verify Performance Test Data")
+    void verifyPerformanceTestData() {
+        var perfEvent = PBLTestData.createPBLEventForPerformanceTest(1);
+        assertNotNull(perfEvent);
+        assertTrue(perfEvent.getEventId().contains("perf_test"));
+
+        var sampleEvents = PBLTestData.createSamplePBLEvents(10);
+        assertNotNull(sampleEvents);
+        assertEquals(10, sampleEvents.size());
+    }
+
+    @Test
+    @DisplayName("Verify Test Data Consistency")
+    void verifyTestDataConsistency() {
+        // Verify all PBL events have consistent product code
+        var events = List.of(
+            PBLTestData.validPBLBalanceEvent(),
+            PBLTestData.validPBLBalanceEventWithMultipleBalances(),
+            PBLTestData.invalidPBLBalanceEvent(),
+            PBLTestData.createPBLEventWithAllValidBalanceTypes()
+        );
+
+        for (var event : events) {
+            assertEquals(PBLTestData.PBL_PRODUCT_CODE, event.getProductCode());
+            assertEquals(PBLTestData.PBL_ACCOUNT_ID, event.getAccountId());
+        }
+
+        // Verify all regular events have consistent product code
+        var regularEvent = PBLTestData.validRegularBalanceEvent();
+        assertEquals(PBLTestData.REGULAR_PRODUCT_CODE, regularEvent.getProductCode());
+        assertEquals(PBLTestData.REGULAR_ACCOUNT_ID, regularEvent.getAccountId());
+    }
+}
